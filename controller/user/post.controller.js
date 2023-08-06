@@ -3,6 +3,7 @@ const path = require('path');
 const Modal = require('../../models/index');
 const User = Modal.User
 const Post = Modal.Posts
+const { Op } = require('sequelize');
 
 const userPost = async (req, res) => {
     const { description } = req.body;
@@ -58,14 +59,8 @@ const getPosts = async (req, res) => {
         }
 
         // Find all posts by users other than the current user and order by created_at in descending order
-        const posts = await Post.findAll({
-            where: {
-                user_id: {
-                    [Op.not]: user.userId,
-                },
-            },
-            order: [['created_at', 'DESC']],
-        });
+        const posts = await Post.findAll();
+
 
         // Return the posts data
         res.json(posts);
@@ -173,8 +168,8 @@ const followUser = async (req, res) => {
             return res.status(404).json({ error: 'Current user not found' });
         }
 
-        const currentUserId = currentUser.userId;
-        const followingIds = currentUser.following_id ? currentUser.following_id : [];
+        const currentUserId = currentUser.dataValues.userId
+        let followingIds = currentUser.dataValues.following_id ? currentUser.dataValues.following_id : [];
 
         // Find the user to follow by userId
         const userToFollow = await User.findOne({ where: { userId } });
@@ -182,9 +177,10 @@ const followUser = async (req, res) => {
             return res.status(404).json({ error: 'User to follow not found' });
         }
 
-        const userToFollowId = userToFollow.userId;
-        const followersIds = userToFollow.followers_id ? userToFollow.followers_id : [];
-        const followingIdsOfUserToFollow = userToFollow.following_id ? userToFollow.following_id : [];
+        const userToFollowId = userToFollow.dataValues.userId;
+        let followersIds = userToFollow.dataValues.followers_id ? userToFollow.dataValues.followers_id : [];
+        let followingIdsOfUserToFollow = userToFollow.dataValues.following_id ? userToFollow.dataValues.following_id : [];
+
 
         // Check if the current user is already following the specified user and vice versa
         const isFollowing = followingIds.includes(userToFollowId);
@@ -192,16 +188,17 @@ const followUser = async (req, res) => {
 
         // Update the current user's followingIds array only if they are not already following
         if (!isFollowing) {
-            followingIds.push(userToFollowId);
-            await currentUser.update({ following_id: followingIds });
+            followingIds.push(userToFollowId)
+            await User.update({ following_id: followingIds }, { where: { userId: currentUserId } });
         }
+
 
         // Update the user being followed's followersIds array only if they are not already following the current user
         if (!isFollowedByUserToFollow) {
             followersIds.push(currentUserId);
-            await userToFollow.update({ followers_id: followersIds });
-        }
+            await User.update({ followers_id: followersIds }, { where: { userId: userToFollowId } });
 
+        }
         res.status(200).json({ followStatus: !isFollowing });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -220,8 +217,8 @@ const unfollowUser = async (req, res) => {
             return res.status(404).json({ error: 'Current user not found' });
         }
 
-        const currentUserId = currentUser.userId;
-        const followingIds = currentUser.following_id ? currentUser.following_id : [];
+        const currentUserId = currentUser.dataValues.userId;
+        const followingIds = currentUser.dataValues.following_id ? currentUser.dataValues.following_id : [];
 
         // Find the user to unfollow by userId
         const userToUnfollow = await User.findOne({ where: { userId } });
@@ -229,9 +226,9 @@ const unfollowUser = async (req, res) => {
             return res.status(404).json({ error: 'User to unfollow not found' });
         }
 
-        const userToUnfollowId = userToUnfollow.userId;
-        const followersIds = userToUnfollow.followers_id ? userToUnfollow.followers_id : [];
-        const followingIdsOfUserToUnfollow = userToUnfollow.following_id ? userToUnfollow.following_id : [];
+        const userToUnfollowId = userToUnfollow.dataValues.userId;
+        const followersIds = userToUnfollow.dataValues.followers_id ? userToUnfollow.dataValues.followers_id : [];
+        const followingIdsOfUserToUnfollow = userToUnfollow.dataValues.following_id ? userToUnfollow.dataValues.following_id : [];
 
         // Check if the current user is following the specified user and vice versa
         const isFollowing = followingIds.includes(userToUnfollowId);
@@ -240,13 +237,13 @@ const unfollowUser = async (req, res) => {
         // Update the current user's followingIds array only if they are following the specified user
         if (isFollowing) {
             const updatedFollowingIds = followingIds.filter(id => id !== userToUnfollowId);
-            await currentUser.update({ following_id: updatedFollowingIds });
+            await User.update({ following_id: updatedFollowingIds }, { where: { userId: currentUserId } });
         }
 
         // Update the user being unfollowed's followersIds array only if they are followed by the current user
         if (isFollowedByUserToUnfollow) {
             const updatedFollowersIds = followersIds.filter(id => id !== currentUserId);
-            await userToUnfollow.update({ followers_id: updatedFollowersIds });
+            await User.update({ followers_id: updatedFollowersIds }, { where: { userId: userToUnfollowId } });
         }
 
         res.status(200).json({ followStatus: false }); // Set followStatus to false as the user is now unfollowed
@@ -254,6 +251,7 @@ const unfollowUser = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
+
 
 const getUserPostsOfFollowedUsers = async (req, res) => {
     const currentUserEmail = req.user.email; // Email of the current user
@@ -265,18 +263,18 @@ const getUserPostsOfFollowedUsers = async (req, res) => {
             return res.status(404).json({ error: 'Current user not found' });
         }
 
-        const currentUserId = currentUser.userId;
-        const followingIds = currentUser.following_id ? currentUser.following_id : [];
+        const currentUserId = currentUser.dataValues.userId;
+        const followingIds = currentUser.dataValues.following_id ? currentUser.dataValues.following_id : [];
 
+        followingIds.push(currentUserId);
         // Fetch posts from users who are followed by the current user and the current user's own posts
         const userPosts = await Post.findAll({
             where: {
-                [Op.or]: [
-                    { user_id: currentUserId }, // Include the current user's posts
-                    { user_id: followingIds }, // Include posts from followed users
-                ],
+                user_id: {
+                    [Op.in]: followingIds,
+                },
             },
-            order: [['created_at', 'DESC']],
+            order: [['createdAt', 'DESC']],
         });
 
         res.status(200).json({ posts: userPosts });
@@ -296,8 +294,8 @@ const exploreUsers = async (req, res) => {
             return res.status(404).json({ error: 'Current user not found' });
         }
 
-        const currentUserId = currentUser.userId;
-        const followingIds = currentUser.following_id ? currentUser.following_id : [];
+        const currentUserId = currentUser.dataValues.userId;
+        const followingIds = currentUser.dataValues.following_id ? currentUser.following_id : [];
 
         // Fetch all user IDs
         const allUsers = await User.findAll({ attributes: ['userId'] });
@@ -312,7 +310,7 @@ const exploreUsers = async (req, res) => {
             where: {
                 user_id: unfollowedUserIds,
             },
-            order: [['created_at', 'DESC']],
+            order: [['createdAt', 'DESC']],
         });
 
         res.status(200).json({ posts: userPosts });

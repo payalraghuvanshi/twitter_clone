@@ -90,6 +90,12 @@ const signIn = async (req, res) => {
             userId: user.userId,
             email: user.email,
         };
+        // Set the cookie with the token
+        res.cookie('auth_token', token, {
+            maxAge: 3600000, // 1 hour in milliseconds
+            httpOnly: true,
+            secure: true,
+        });
 
         res.status(200).json({
             message: 'Signed in successfully!',
@@ -107,19 +113,27 @@ const signIn = async (req, res) => {
     }
 };
 
-const signOut = async (req, res) => {
+const signOut = (req, res) => {
     try {
-        // Destroy the session to sign out the user
-        req.session.destroy((err) => {
-            if (err) {
-                return res.status(500).json({ error: 'Unable to sign out' });
-            }
-            res.status(200).json({ message: 'Signed out successfully!' });
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
+        console.log(req.session);
+        if (req.session) {
+            req.session.destroy((err) => {
+              if (err) {
+                console.error('Error destroying session:', err);
+                return res.status(500).json({ error: 'Failed to log out' });
+              }
+        
+            // Clear the cookie
+            res.clearCookie('auth_token');
+      
+            // Respond with a success message
+            res.status(200).json({ message: 'Logged out successfully!' });
+          });
+        } }catch (error) {
+        res.status(500).json({ error: 'Failed to log out' });
+    
+}};
+
 
 const forgetPassword = async (req, res) => {
     try {
@@ -195,15 +209,15 @@ const resetPassword = async (req, res) => {
 
 const getUsers = async (req, res) => {
     try {
-      const users = await User.findAll(); // Used findAll to retrieve all users from the database
-      res.json(users);
+        const users = await User.findAll(); // Used findAll to retrieve all users from the database
+        res.json(users);
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Internal server error' });
+        console.error(error);
+        res.status(500).json({ error: 'Internal server error' });
     }
-  };
+};
 
 
 
 
-module.exports = { signUp, signIn, signOut, forgetPassword, resetPassword,getUsers }
+module.exports = { signUp, signIn, signOut, forgetPassword, resetPassword, getUsers }

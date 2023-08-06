@@ -1,9 +1,12 @@
-// middleware/authMiddleware.js
-
 const jwt = require('jsonwebtoken');
-const { User } = require('../models'); // Make sure the correct path is provided to the User model
+const { User } = require('../models');
 
 const authMiddleware = async (req, res, next) => {
+  // Check if the session is not available (destroyed or not created)
+  if (!req.session) {
+    return res.status(401).json({ error: 'Session expired or invalid token' });
+  }
+
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -33,6 +36,9 @@ const authMiddleware = async (req, res, next) => {
 
     next();
   } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      return res.status(401).json({ error: 'Session expired or invalid token' });
+    }
     res.status(401).json({ error: 'Invalid token' });
   }
 };
