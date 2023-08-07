@@ -20,7 +20,7 @@ const { handleValidationErrors } = require('../middleware/validate.schema');
 
 router.post('/register', upload.single('profilePic'), signUpSchema, handleValidationErrors, userController.signUp);
 router.post('/login', signInSchema, handleValidationErrors, userController.signIn);
-router.post('/logout',authMiddleware, userController.signOut);
+router.post('/logout', userController.signOut);
 router.post('/forgot-password', forgetPasswordSchema, handleValidationErrors, userController.forgetPassword);
 router.post('/reset-password/:token', resetPasswordSchema, handleValidationErrors, userController.resetPassword);
 router.get('/get-user', authMiddleware, userController.getUsers); //get all users
